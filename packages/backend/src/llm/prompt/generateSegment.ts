@@ -72,16 +72,12 @@ export function getPrompt(lang = 'cn', voiceList: VoiceConfig[], text: string) {
   switch (lang) {
     case 'zh':
     case 'cn':
-      return cnTemplate(
-        voiceList.filter((voice) => voice.Name.startsWith('zh')),
-        text
-      )
+      const zhVoices = voiceList.filter((voice) => voice.Name.startsWith('zh'))
+      return cnTemplate(zhVoices, text)
     case 'eng':
-      return engTemplate(
-        voiceList.filter((voice) => voice.Name.startsWith('en')),
-        text
-      )
+      const enVoices = voiceList.filter((voice) => voice.Name.startsWith('en'))
+      return engTemplate(enVoices, text)
     default:
-      throw new Error(`Unsupported language: ${lang}`)
+      throw new Error(`Unsupported language: ${lang}. Supported languages: zh, cn, eng`)
   }
 }

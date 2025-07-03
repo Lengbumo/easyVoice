@@ -16,7 +16,7 @@ interface CustomConfig extends AxiosRequestConfig {
 
 const instance: AxiosInstance = axios.create({
   baseURL: process.env.API_URL || 'http://localhost:3000/api',
-  timeout: 10000,
+  timeout: 60000, // 增加到60秒，与OpenAI配置保持一致
   headers: {
     'Content-Type': 'application/json',
   },

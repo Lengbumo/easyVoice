@@ -125,27 +125,42 @@ async function generateWithLLMStream(task: Task) {
 
     for (let seg of segments) {
       count++
-      const prompt = getPrompt(lang, voiceList, seg)
-      logger.debug(`Prompt for LLM: ${prompt}`)
-      const llmResponse = await fetchLLMSegment(prompt)
-      let llmSegments = llmResponse?.result || llmResponse?.segments || []
-      if (!Array.isArray(llmSegments)) {
-        throw new Error(
-          'LLM response is not an array, please switch to Edge TTS mode or use another model'
-        )
+      try {
+        const prompt = getPrompt(lang, voiceList, seg)
+        logger.debug(`Prompt for LLM: ${prompt}`)
+        const llmResponse = await fetchLLMSegment(prompt)
+        let llmSegments = llmResponse?.result || llmResponse?.segments || []
+        if (!Array.isArray(llmSegments)) {
+          throw new Error(
+            'LLM response is not an array, please switch to Edge TTS mode or use another model'
+          )
+        }
+        for (let segment of formatLlmSegments(llmSegments)) {
+          const stream = (await generateSingleVoiceStream({
+            ...segment,
+            output,
+            outputType: 'stream',
+          })) as Readable
+          stream.pipe(outputStream, { end: false })
+          await new Promise((resolve) => {
+            stream.on('end', resolve)
+          })
+        }
+        logger.info(`Progress: ${getProgress()}%`)
+      } catch (err) {
+        const error = err as Error
+        logger.error(`LLM segment processing failed for segment ${count}: ${error.message}`)
+
+        // 如果是网络连接错误，跳过这个段落并继续处理
+        if (error.message.includes('aborted') || error.message.includes('ECONNRESET') || error.message.includes('Network error')) {
+          logger.warn(`Skipping segment ${count} due to network error, continuing with next segment`)
+          continue
+        }
+
+        // 对于其他类型的错误，也记录但不崩溃服务器
+        logger.warn(`Skipping segment ${count} due to error: ${error.message}`)
+        continue
       }
-      for (let segment of formatLlmSegments(llmSegments)) {
-        const stream = (await generateSingleVoiceStream({
-          ...segment,
-          output,
-          outputType: 'stream',
-        })) as Readable
-        stream.pipe(outputStream, { end: false })
-        await new Promise((resolve) => {
-          stream.on('end', resolve)
-        })
-      }
-      logger.info(`Progress: ${getProgress()}%`)
     }
     outputStream.end()
     setTimeout(() => {
@@ -365,26 +380,49 @@ function validateLangAndVoice(lang: string, voice: string, res: Response): boole
 }
 
 /**
- * 从 LLM 获取分段参数
+ * 从 LLM 获取分段参数（带重试机制）
  */
-async function fetchLLMSegment(prompt: string): Promise<any> {
-  const response = await openai.createChatCompletion({
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a helpful assistant. And you can return valid json object',
-      },
-      { role: 'user', content: prompt },
-    ],
-    // temperature: 0.7,
-    // max_tokens: 500,
-    response_format: { type: 'json_object' },
-  })
+async function fetchLLMSegment(prompt: string, maxRetries: number = 3): Promise<any> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await openai.createChatCompletion({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant. And you can return valid json object',
+          },
+          { role: 'user', content: prompt },
+        ],
+        // temperature: 0.7,
+        // max_tokens: 500,
+        response_format: { type: 'json_object' },
+      })
 
-  if (!response.choices[0].message.content) {
-    throw new Error(ErrorMessages.INVALID_API_RESPONSE)
+      if (!response.choices[0].message.content) {
+        throw new Error(ErrorMessages.INVALID_API_RESPONSE)
+      }
+      return parseLLMResponse(response)
+    } catch (err) {
+      const error = err as Error
+      const isNetworkError = error.message.includes('aborted') ||
+                            error.message.includes('ECONNRESET') ||
+                            error.message.includes('Network error') ||
+                            error.message.includes('timeout')
+
+      logger.warn(`LLM request attempt ${attempt + 1}/${maxRetries} failed: ${error.message}`)
+
+      // 如果是最后一次尝试，或者不是网络错误，直接抛出
+      if (attempt === maxRetries - 1 || !isNetworkError) {
+        logger.error(`LLM request failed after ${attempt + 1} attempts: ${error.message}`)
+        throw new Error(`${ErrorMessages.API_FETCH_FAILED}: ${error.message}`)
+      }
+
+      // 等待一段时间后重试（指数退避）
+      const delayMs = Math.pow(2, attempt) * 1000 // 1s, 2s, 4s...
+      logger.info(`Retrying LLM request in ${delayMs}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
   }
-  return parseLLMResponse(response)
 }
 
 /**

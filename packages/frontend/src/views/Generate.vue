@@ -49,8 +49,8 @@
             </div>
           </template>
 
-          <!-- 语音选择模式切换 -->
-          <div class="voice-mode-selector">
+          <!-- 语音选择模式切换 - AI推荐功能已隐藏 -->
+          <!-- <div class="voice-mode-selector">
             <el-radio-group v-model="audioConfig.voiceMode" size="large">
               <el-radio-button label="preset">预设语音</el-radio-button>
               <el-tooltip
@@ -64,10 +64,10 @@
                 </el-radio-button>
               </el-tooltip>
             </el-radio-group>
-          </div>
+          </div> -->
 
-          <!-- 预设语音选择 -->
-          <div v-if="audioConfig.voiceMode === 'preset'" class="voice-selector">
+          <!-- 预设语音选择 - 始终显示 -->
+          <div class="voice-selector">
             <el-form label-position="top" size="default">
               <el-form-item label="语言">
                 <el-select
@@ -145,7 +145,8 @@
             </el-form>
           </div>
 
-          <div v-else class="ai-settings">
+          <!-- AI设置部分已隐藏 -->
+          <!-- <div v-else class="ai-settings">
             <el-form label-position="top">
               <el-form-item label="OpenAI API URL">
                 <el-input
@@ -169,7 +170,7 @@
                 <el-input v-model="audioConfig.openaiModel" clearable placeholder="gpt-4o..." />
               </el-form-item>
             </el-form>
-          </div>
+          </div> -->
 
           <div class="preview-section">
             <el-form-item label="试听文本">
@@ -497,17 +498,24 @@ const buildParams = (text: string) => {
     text: text.trim(),
   }
 
-  if (voiceMode === 'preset') {
-    params.voice = selectedVoice
-    params.rate = `${rate > 0 ? '+' : ''}${rate}%`
-    params.pitch = `${pitch > 0 ? '+' : ''}${pitch}Hz`
-    params.volume = `${volume > 0 ? '+' : ''}${volume}%`
-  } else {
-    params.useLLM = true
-    params.openaiBaseUrl = openaiBaseUrl
-    params.openaiKey = openaiKey
-    params.openaiModel = openaiModel
-  }
+  // AI推荐功能已禁用，始终使用预设语音模式
+  params.voice = selectedVoice
+  params.rate = `${rate > 0 ? '+' : ''}${rate}%`
+  params.pitch = `${pitch > 0 ? '+' : ''}${pitch}Hz`
+  params.volume = `${volume > 0 ? '+' : ''}${volume}%`
+
+  // 以下AI推荐相关代码已禁用
+  // if (voiceMode === 'preset') {
+  //   params.voice = selectedVoice
+  //   params.rate = `${rate > 0 ? '+' : ''}${rate}%`
+  //   params.pitch = `${pitch > 0 ? '+' : ''}${pitch}Hz`
+  //   params.volume = `${volume > 0 ? '+' : ''}${volume}%`
+  // } else {
+  //   params.useLLM = true
+  //   params.openaiBaseUrl = openaiBaseUrl
+  //   params.openaiKey = openaiKey
+  //   params.openaiModel = openaiModel
+  // }
   return params
 }
 

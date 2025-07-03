@@ -8,10 +8,34 @@ import { AUDIO_DIR } from '../config'
 
 export async function getLangConfig(text: string) {
   const { franc } = await import('franc')
-  let lang = franc(text)
+  const originalLang = franc(text)
+  let lang = originalLang
+
+  // 处理语言检测结果
   if (lang === 'cmn') {
     lang = 'zh'
+  } else if (lang === 'und' || !lang) {
+    // 当语言检测失败时，根据文本内容智能判断
+    const hasChineseChars = /[\u4e00-\u9fff]/.test(text)
+    const hasEnglishChars = /[a-zA-Z]/.test(text)
+
+    if (hasChineseChars) {
+      lang = 'zh'
+      console.log(`Language detection fallback: detected Chinese characters, using 'zh'`)
+    } else if (hasEnglishChars) {
+      lang = 'eng'
+      console.log(`Language detection fallback: detected English characters, using 'eng'`)
+    } else {
+      // 纯数字或其他字符时默认使用中文
+      lang = 'zh'
+      console.log(`Language detection fallback: no specific language detected, defaulting to 'zh'`)
+    }
   }
+
+  if (originalLang !== lang) {
+    console.log(`Language detected: '${originalLang}' -> '${lang}' for text: "${text.slice(0, 20)}..."`)
+  }
+
   const voicePath = resolve(__dirname, `../llm/prompt/voice.json`)
   const voiceList = await readJson<VoiceConfig[]>(voicePath)
   return { lang, voiceList }
